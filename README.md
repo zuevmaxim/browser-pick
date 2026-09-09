@@ -4,7 +4,9 @@ A tiny macOS menubar utility that intercepts links and lets you pick which brows
 
 **380 KB on disk · ~53 MB of memory at idle.** Native Swift, no Electron, no web views, no telemetry.
 
-Inspired by [Velja](https://sindresorhus.com/velja) and [Choosy](https://choosy.app), but minimal, open source, and free.
+Inspired by [Velja](https://sindresorhus.com/velja) and [Choosy](https://choosy.app), but intentionally minimal.
+
+> **Evaluation only:** the upstream repository describes the project as MIT-licensed but does not currently include a `LICENSE` file. Do not redistribute source or binaries from this fork until the copyright holder adds a license or grants explicit permission.
 
 > **Heads up:** the first launch is blocked by macOS Gatekeeper (the build is ad-hoc signed, not Apple-notarized). You'll see *"BrowserPick.app" was blocked to protect your Mac.* One click in **System Settings → Privacy & Security → Open Anyway** unblocks it. Full steps in [First launch: unblock Gatekeeper](#first-launch-unblock-gatekeeper).
 
@@ -24,7 +26,7 @@ Minimum viable scope:
 
 - **Build system:** Swift Package Manager + shell script that assembles a `.app` bundle. No Xcode required, just Command Line Tools.
 - **Min macOS:** 15 Sequoia.
-- **Distribution:** GitHub Releases + Homebrew tap at [cvladan/homebrew-tap](https://github.com/cvladan/homebrew-tap).
+- **Distribution:** disabled pending license clarification and independent signing/release infrastructure.
 
 ### Why these choices
 
@@ -34,14 +36,15 @@ Minimum viable scope:
 
 ## Build & run
 
-For development, use `install.sh`. It builds, copies the app to `/Applications`, registers it with Launch Services, and launches it:
+For development, use `install.sh`. It builds, copies the app to `~/Applications`, lets Launch Services discover it, and launches it:
 
 ```sh
 ./install.sh           # debug
-./install.sh release   # release
+./install.sh release   # release build
+./install.sh --replace # explicitly replace the same BrowserPick bundle ID
 ```
 
-**Why install to `/Applications`?** macOS only considers apps in Launch-Services-indexed locations (mainly `/Applications`) as candidates for the default browser. Running from `.build/` works for basic UI testing but the system won't let you set it as default and link interception won't work reliably.
+The installer refuses to overwrite an existing app unless `--replace` is supplied, and even then verifies its bundle identifier first. Set `INSTALL_DIR=/Applications` explicitly if a system-wide installation is needed. Running from `.build/` works for basic UI testing, but default-browser registration and link interception are more reliable from an Applications directory.
 
 On first launch, BrowserPick automatically asks macOS to make it the default browser. You'll see the system confirmation dialog ("Do you want to use 'BrowserPick' to open web pages?"). Click **Use 'BrowserPick'**.
 
@@ -79,110 +82,52 @@ Sources/BrowserPick/
 Resources/Info.plist                        URL types, LSUIElement
 build.sh                                    SPM build → .app assembly
 install.sh                                  build → copy to /Applications → launch
-release.sh                                  build → zip → GitHub Release + tap bump
+release.sh                                  local release zip + SHA-256 only
+Scripts/inspect-bundle.sh                   bundle security inspection
+Tests/BrowserPickTests/                     URL, queue, browser, persistence tests
 ```
-
-## Install
-
-```sh
-brew install --cask cvladan/tap/browserpick
-```
-
-Brew will auto-tap [cvladan/homebrew-tap](https://github.com/cvladan/homebrew-tap) on first install. To update later:
-
-```sh
-brew update
-brew upgrade --cask browserpick
-```
-
-`brew update` is required. Homebrew caches the tap locally and won't see a new cask version until you refresh it. Without `brew update`, `brew upgrade` will report "already installed" even when a newer release exists.
 
 ### First launch: unblock Gatekeeper
 
-The release `.app` is ad-hoc signed, not Apple-notarized, so macOS quarantines it on download and refuses to launch the first time. Expect this; it's a one-time, two-click fix:
+The `.app` is ad-hoc signed, not Apple-notarized. If you transfer a local evaluation build between machines, macOS may quarantine it and refuse to launch it the first time:
 
-1. Brew installs the app to `/Applications/BrowserPick.app` and tries to launch it.
+1. Try to open `BrowserPick.app`.
 2. macOS shows: **"BrowserPick.app" was blocked to protect your Mac.** → click **Done**.
 3. Open **System Settings → Privacy & Security**.
 4. Scroll down to the security message: *"BrowserPick.app" was blocked to protect your Mac.* → click **Open Anyway**.
 5. Confirm in the dialog (Touch ID or password).
 6. The app launches and asks to be made the default browser. Click **Use 'BrowserPick'**.
 
-After this, BrowserPick launches normally, and `brew upgrade --cask browserpick` won't re-trigger the prompt for the same install path unless the binary identity changes.
+After this, BrowserPick launches normally for that local install path unless the binary identity changes.
 
 CLI shortcut for the same thing (skips the Settings dance):
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/BrowserPick.app
+xattr -dr com.apple.quarantine ~/Applications/BrowserPick.app
 ```
 
 If you didn't get the default-browser prompt automatically, set it manually in **System Settings → Desktop & Dock → Default web browser**.
 
-## Release
+## Local packaging
 
-No App Store, no notarization for now. Distribution has two pieces:
-
-- **Source + release script** live in this repo.
-- **Cask recipe** lives in a separate Homebrew tap repo: [cvladan/homebrew-tap](https://github.com/cvladan/homebrew-tap), at `Casks/browserpick.rb`.
-- **The `.app` bundle** is **not** committed anywhere. It's attached as a binary asset to a GitHub Release in this repo, and the cask points brew at that URL.
-
-The split is required because Homebrew taps must be in repos named `homebrew-*` and follow a specific layout. Keeping the recipe in its own repo also means `brew upgrade` works (you can't upgrade direct-URL cask installs).
-
-### One-time setup
-
-Install and authenticate the [GitHub CLI](https://cli.github.com) (only needed once per machine):
+`release.sh` only builds a local release archive and prints its SHA-256 checksum. It never commits, tags, pushes, creates a GitHub Release, or modifies a Homebrew tap:
 
 ```sh
-brew install gh
-gh auth login
+./release.sh         # use and validate the version in Info.plist
+./release.sh 0.0.5   # additionally assert the expected X.Y.Z version
 ```
 
-Clone the tap next to this repo so `release.sh` can write to it:
+The archive is written to `.build/BrowserPick-X.Y.Z.zip`. Publishing remains disabled until licensing, signing, notarization, and fork-owned release infrastructure are resolved.
+
+## Verification
 
 ```sh
-git clone https://github.com/cvladan/homebrew-tap ~/dev/homebrew-tap
+swift test -Xswiftc -warnings-as-errors
+./build.sh release
+./Scripts/inspect-bundle.sh
 ```
 
-`release.sh` looks for the tap at `~/dev/homebrew-tap`. Override with `TAP_DIR=/path/to/homebrew-tap ./release.sh ...` if you cloned it elsewhere.
-
-### Cutting a release
-
-For a routine patch release, run without an argument. The script reads the current version from `Info.plist` and bumps the patch component by one (e.g. `0.0.3` → `0.0.4`):
-
-```sh
-./release.sh
-```
-
-For a minor or major bump, pass the version explicitly:
-
-```sh
-./release.sh 0.1.0
-```
-
-That script:
-
-1. Refuses to run if either working tree (this repo or the tap) is dirty, or if the tag already exists.
-2. Pulls the tap to make sure it's up to date with origin.
-3. Bumps `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist` via PlistBuddy, and commits the bump as `Release v0.0.2`. This is what the About panel reads; without this step every release would still show the old version.
-4. Builds `.build/BrowserPick.app` (release config, ad-hoc signed).
-5. Zips it to `.build/BrowserPick.zip` with `ditto` (preserves macOS metadata).
-6. Computes the SHA256 of the zip.
-7. Tags `v0.0.2` in this repo and pushes both `main` and the tag to `origin`.
-8. Creates a GitHub Release `v0.0.2` here and uploads the zip as a release asset.
-9. Rewrites `Casks/browserpick.rb` in the tap repo with the new `version` and `sha256`, commits (`browserpick 0.0.2`), and pushes the tap's `main`.
-
-After it finishes, anyone in the world can `brew install --cask cvladan/tap/browserpick` (or `brew upgrade --cask browserpick`) and pick up the new build. Brew refreshes tap state with `brew update`, which usually runs implicitly.
-
-### If something goes wrong mid-release
-
-The script does effectful things in this order: bump Info.plist → commit → build → zip → tag → push main+tag → create release → edit tap cask → commit tap → push tap. If it dies partway, undo only what already happened:
-
-- `git reset --hard HEAD~1` in this repo: undo the version-bump commit if it was made but nothing's been pushed yet.
-- `git tag -d v0.0.2 && git push origin :refs/tags/v0.0.2`: delete a tag locally and on the remote.
-- `gh release delete v0.0.2`: delete the Release if it was created.
-- `cd ~/dev/homebrew-tap && git restore Casks/browserpick.rb`: undo the cask rewrite if the tap commit hasn't happened yet. If it has, `git reset --hard HEAD~1` (and force-push if you already pushed, only safe if no one else uses the tap).
-
-Then fix the underlying issue and re-run.
+GitHub Actions also runs these tests plus ShellCheck, Gitleaks, OSV Scanner, CodeQL, and bundle inspection.
 
 ## FAQ
 
@@ -192,8 +137,8 @@ That's `com.apple.AutoFillPanel`, a macOS XPC service for password/credit-card a
 
 ## Status
 
-Alpha. Core features work: menubar icon, URL interception, browser chooser with keyboard shortcuts, settings window, browser discovery, launch at login. Not yet released.
+Alpha, evaluation only, and not published. Core features work: menubar icon, URL interception, browser chooser with keyboard shortcuts, settings window, browser discovery, and launch at login.
 
 ## License
 
-MIT (TBD, add `LICENSE` before first release).
+Unresolved. The upstream README says “MIT,” but there is no `LICENSE` file. Do not redistribute this fork until the copyright holder adds the license or grants explicit permission.

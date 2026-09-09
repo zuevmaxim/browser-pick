@@ -4,18 +4,24 @@
 #        ./build.sh release    (release, ad-hoc signed)
 set -euo pipefail
 
+if [[ $# -gt 1 || "${1:-debug}" != "debug" && "${1:-debug}" != "release" ]]; then
+    echo "Usage: $0 [debug|release]" >&2
+    exit 2
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${1:-debug}"
 APP_NAME="BrowserPick"
-BUILD_DIR=".build"
+BUILD_DIR="${SCRIPT_DIR}/.build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 
 echo "==> swift build (${CONFIG})"
 if [[ "$CONFIG" == "release" ]]; then
-    swift build -c release
-    BIN_PATH=".build/release/${APP_NAME}"
+    swift build --package-path "${SCRIPT_DIR}" -c release
+    BIN_PATH="${BUILD_DIR}/release/${APP_NAME}"
 else
-    swift build
-    BIN_PATH=".build/debug/${APP_NAME}"
+    swift build --package-path "${SCRIPT_DIR}"
+    BIN_PATH="${BUILD_DIR}/debug/${APP_NAME}"
 fi
 
 echo "==> Assembling ${APP_BUNDLE}"
@@ -24,7 +30,7 @@ mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BIN_PATH}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
-cp Resources/Info.plist "${APP_BUNDLE}/Contents/Info.plist"
+cp "${SCRIPT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 printf "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
 echo "==> Ad-hoc signing"

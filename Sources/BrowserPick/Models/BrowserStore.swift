@@ -7,13 +7,21 @@ import Observation
 final class BrowserStore {
     private(set) var browsers: [Browser] = []
 
-    private let storageKey = "browsers"
-    private let defaults = UserDefaults.standard
+    private let storageKey: String
+    private let defaults: UserDefaults
+    private let discovery: () -> [Browser]
 
-    init() {
+    init(
+        defaults: UserDefaults = .standard,
+        storageKey: String = "browsers",
+        discovery: @escaping () -> [Browser] = Browser.discoverInstalled
+    ) {
+        self.defaults = defaults
+        self.storageKey = storageKey
+        self.discovery = discovery
         load()
         if browsers.isEmpty {
-            browsers = Browser.discoverInstalled()
+            browsers = discovery()
             save()
         }
     }
@@ -45,7 +53,7 @@ final class BrowserStore {
     }
 
     func rediscover() {
-        let discovered = Browser.discoverInstalled()
+        let discovered = discovery()
         let existingIDs = Set(browsers.map(\.bundleIdentifier))
         for b in discovered where !existingIDs.contains(b.bundleIdentifier) {
             browsers.append(b)

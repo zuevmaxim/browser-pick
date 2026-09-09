@@ -1,0 +1,65 @@
+name: Security and tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-and-inspect:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test with warnings as errors
+        run: swift test -Xswiftc -warnings-as-errors
+      - name: Build application bundle
+        run: ./build.sh release
+      - name: Inspect application bundle
+        run: ./Scripts/inspect-bundle.sh
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ludeeus/action-shellcheck@2.0.0
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: swift
+      - run: swift build -Xswiftc -warnings-as-errors
+      - uses: github/codeql-action/analyze@v4
+
+  osv:
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@0c58c542420dfd23fcac08dd9c8ca3cca9c36f1a
+    with:
+      scan-args: |-
+        --include-git-root
+        -r
+        ./

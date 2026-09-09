@@ -14,13 +14,14 @@ CONFIG="${1:-debug}"
 APP_NAME="BrowserPick"
 BUILD_DIR="${SCRIPT_DIR}/.build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+SWIFT_FLAGS=(-Xswiftc -warnings-as-errors)
 
 echo "==> swift build (${CONFIG})"
 if [[ "$CONFIG" == "release" ]]; then
-    swift build --package-path "${SCRIPT_DIR}" -c release
+    swift build --package-path "${SCRIPT_DIR}" -c release "${SWIFT_FLAGS[@]}"
     BIN_PATH="${BUILD_DIR}/release/${APP_NAME}"
 else
-    swift build --package-path "${SCRIPT_DIR}"
+    swift build --package-path "${SCRIPT_DIR}" "${SWIFT_FLAGS[@]}"
     BIN_PATH="${BUILD_DIR}/debug/${APP_NAME}"
 fi
 

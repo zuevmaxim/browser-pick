@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "BrowserPick",
             path: "Sources/BrowserPick"
+        ),
+        .testTarget(
+            name: "BrowserPickTests",
+            dependencies: ["BrowserPick"],
+            path: "Tests/BrowserPickTests"
         )
     ]
 )

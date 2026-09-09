@@ -140,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.open(request: request, in: browser)
             }
         }
-        chooserWindowController?.show(for: request)
+        chooserWindowController?.enqueue(request)
     }
 
     func open(request: WebURLRequest, in browser: Browser) {
@@ -157,6 +157,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configuration: config,
             completionHandler: nil
         )
-        chooserWindowController?.hide()
     }
 }

@@ -10,7 +10,7 @@ private final class ChooserPanel: NSPanel {
 final class ChooserWindowController: NSWindowController {
     private let store: BrowserStore
     private let onPick: (Browser, WebURLRequest) -> Void
-    private var currentRequest: WebURLRequest?
+    private var requests = FIFOQueue<WebURLRequest>()
 
     init(store: BrowserStore, onPick: @escaping (Browser, WebURLRequest) -> Void) {
         self.store = store
@@ -36,16 +36,32 @@ final class ChooserWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(for request: WebURLRequest) {
-        currentRequest = request
+    func enqueue(_ request: WebURLRequest) {
+        let shouldPresent = requests.current == nil
+        requests.enqueue(request)
+        if shouldPresent {
+            showCurrent()
+        }
+    }
+
+    private func showCurrent() {
+        guard let request = requests.current else {
+            window?.orderOut(nil)
+            return
+        }
+
         let view = ChooserView(
             store: store,
             request: request,
             onPick: { [weak self] browser in
-                guard let request = self?.currentRequest else { return }
-                self?.onPick(browser, request)
+                guard let self, let request = self.requests.completeCurrent() else { return }
+                self.onPick(browser, request)
+                self.showCurrent()
             },
-            onCancel: { [weak self] in self?.hide() }
+            onCancel: { [weak self] in
+                self?.requests.cancelCurrent()
+                self?.showCurrent()
+            }
         )
         window?.contentViewController = NSHostingController(rootView: view)
 
@@ -61,8 +77,4 @@ final class ChooserWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(nil)
     }
 
-    func hide() {
-        window?.orderOut(nil)
-        currentRequest = nil
-    }
 }

@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>BrowserPick</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.cvladan.BrowserPick</string>
+	<string>com.zuevmaxim.BrowserPick</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

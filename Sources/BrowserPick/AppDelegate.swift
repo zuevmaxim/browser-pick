@@ -128,26 +128,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         withReplyEvent reply: NSAppleEventDescriptor
     ) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
-              let url = URL(string: urlString) else {
+              let request = WebURLRequest(validating: urlString) else {
             return
         }
-        presentChooser(for: url)
+        presentChooser(for: request)
     }
 
-    private func presentChooser(for url: URL) {
+    private func presentChooser(for request: WebURLRequest) {
         if chooserWindowController == nil {
-            chooserWindowController = ChooserWindowController(store: store) { [weak self] browser, url in
-                self?.open(url: url, in: browser)
+            chooserWindowController = ChooserWindowController(store: store) { [weak self] browser, request in
+                self?.open(request: request, in: browser)
             }
         }
-        chooserWindowController?.show(for: url)
+        chooserWindowController?.show(for: request)
     }
 
-    func open(url: URL, in browser: Browser) {
+    func open(request: WebURLRequest, in browser: Browser) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
         NSWorkspace.shared.open(
-            [url],
+            [request.url],
             withApplicationAt: browser.bundleURL,
             configuration: config,
             completionHandler: nil

@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ChooserView: View {
     @Bindable var store: BrowserStore
-    let url: URL
+    let request: WebURLRequest
     let onPick: (Browser) -> Void
     let onCancel: () -> Void
 
@@ -15,7 +15,7 @@ struct ChooserView: View {
             HStack(spacing: 8) {
                 Image(systemName: "link")
                     .foregroundStyle(.secondary)
-                Text(url.absoluteString)
+                Text(request.originalString)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .font(.system(size: 12))

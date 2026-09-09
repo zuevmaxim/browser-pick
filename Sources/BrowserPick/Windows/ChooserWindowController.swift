@@ -9,10 +9,10 @@ private final class ChooserPanel: NSPanel {
 
 final class ChooserWindowController: NSWindowController {
     private let store: BrowserStore
-    private let onPick: (Browser, URL) -> Void
-    private var currentURL: URL?
+    private let onPick: (Browser, WebURLRequest) -> Void
+    private var currentRequest: WebURLRequest?
 
-    init(store: BrowserStore, onPick: @escaping (Browser, URL) -> Void) {
+    init(store: BrowserStore, onPick: @escaping (Browser, WebURLRequest) -> Void) {
         self.store = store
         self.onPick = onPick
 
@@ -36,14 +36,14 @@ final class ChooserWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func show(for url: URL) {
-        currentURL = url
+    func show(for request: WebURLRequest) {
+        currentRequest = request
         let view = ChooserView(
             store: store,
-            url: url,
+            request: request,
             onPick: { [weak self] browser in
-                guard let url = self?.currentURL else { return }
-                self?.onPick(browser, url)
+                guard let request = self?.currentRequest else { return }
+                self?.onPick(browser, request)
             },
             onCancel: { [weak self] in self?.hide() }
         )
@@ -63,6 +63,6 @@ final class ChooserWindowController: NSWindowController {
 
     func hide() {
         window?.orderOut(nil)
-        currentURL = nil
+        currentRequest = nil
     }
 }

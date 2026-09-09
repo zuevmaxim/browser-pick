@@ -37,3 +37,40 @@ struct Browser: Identifiable, Codable, Hashable {
         NSWorkspace.shared.icon(forFile: bundleURL.path)
     }
 }
+
+enum BrowserLaunchValidator {
+    static func isValidLaunchTarget(_ browser: Browser) -> Bool {
+        isValidLaunchTarget(
+            browser,
+            ownBundleIdentifier: Bundle.main.bundleIdentifier,
+            fileExists: { FileManager.default.fileExists(atPath: $0.path) },
+            bundleIdentifierAt: { Bundle(url: $0)?.bundleIdentifier },
+            handlersForScheme: { scheme in
+                guard let probeURL = URL(string: "\(scheme)://example.com") else { return [] }
+                return NSWorkspace.shared.urlsForApplications(toOpen: probeURL).compactMap {
+                    Bundle(url: $0)?.bundleIdentifier
+                }
+            }
+        )
+    }
+
+    static func isValidLaunchTarget(
+        _ browser: Browser,
+        ownBundleIdentifier: String?,
+        fileExists: (URL) -> Bool,
+        bundleIdentifierAt: (URL) -> String?,
+        handlersForScheme: (String) -> [String]
+    ) -> Bool {
+        guard browser.bundleURL.isFileURL,
+              browser.bundleURL.pathExtension.lowercased() == "app",
+              fileExists(browser.bundleURL),
+              browser.bundleIdentifier != ownBundleIdentifier,
+              bundleIdentifierAt(browser.bundleURL) == browser.bundleIdentifier else {
+            return false
+        }
+
+        return ["http", "https"].allSatisfy {
+            handlersForScheme($0).contains(browser.bundleIdentifier)
+        }
+    }
+}

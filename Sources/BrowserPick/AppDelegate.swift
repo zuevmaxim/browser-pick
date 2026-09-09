@@ -144,6 +144,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func open(request: WebURLRequest, in browser: Browser) {
+        guard BrowserLaunchValidator.isValidLaunchTarget(browser) else {
+            NSSound.beep()
+            return
+        }
+
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
         NSWorkspace.shared.open(

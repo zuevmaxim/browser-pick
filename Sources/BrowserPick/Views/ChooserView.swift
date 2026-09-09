@@ -4,10 +4,14 @@ import SwiftUI
 struct ChooserView: View {
     @Bindable var store: BrowserStore
     let request: WebURLRequest
-    let onPick: (Browser) -> Void
+    let suggestion: (suggestion: SiteSuggestion, browser: Browser)?
+    let onPick: (Browser, Bool) -> Void
+    let onAcceptSuggestion: () -> Void
+    let onDismissSuggestion: () -> Void
     let onCancel: () -> Void
 
     @State private var keyMonitor: Any?
+    @State private var isSuggestionVisible = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -26,13 +30,18 @@ struct ChooserView: View {
 
             Divider()
 
+            if let suggestion, isSuggestionVisible {
+                suggestionRow(suggestion)
+                Divider()
+            }
+
             // Browser rows
             VStack(spacing: 2) {
                 ForEach(Array(store.browsers.enumerated()), id: \.element.id) { index, browser in
                     BrowserRow(
                         browser: browser,
                         index: index,
-                        onPick: { onPick(browser) }
+                        onPick: { remember in onPick(browser, remember) }
                     )
                 }
             }
@@ -41,7 +50,7 @@ struct ChooserView: View {
             Divider()
 
             // Footer hint
-            Text("Press number or shortcut · Esc to cancel")
+            Text("Press number or shortcut · ⌘-click to remember · Esc to cancel")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 14)
@@ -57,6 +66,35 @@ struct ChooserView: View {
         .pointerStyle(.default)
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+    }
+
+    private func suggestionRow(_ suggestion: (suggestion: SiteSuggestion, browser: Browser)) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You usually open \(suggestion.suggestion.host) in \(suggestion.browser.name).")
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                Text("Always use this browser for this site?")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Not now") {
+                isSuggestionVisible = false
+                onDismissSuggestion()
+            }
+            .controlSize(.small)
+
+            Button("Always") {
+                onAcceptSuggestion()
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     private func installKeyMonitor() {
@@ -82,12 +120,12 @@ struct ChooserView: View {
 
         // Numbers 1-9
         if let digit = Int(chars), digit >= 1, digit <= store.browsers.count {
-            onPick(store.browsers[digit - 1])
+            onPick(store.browsers[digit - 1], false)
             return true
         }
         // Letter shortcut
         if let browser = store.browser(forShortcut: chars) {
-            onPick(browser)
+            onPick(browser, false)
             return true
         }
         return false
@@ -97,7 +135,7 @@ struct ChooserView: View {
 private struct BrowserRow: View {
     let browser: Browser
     let index: Int
-    let onPick: () -> Void
+    let onPick: (Bool) -> Void
 
     @State private var hovering = false
 
@@ -132,7 +170,7 @@ private struct BrowserRow: View {
         .background(hovering ? Color.accentColor.opacity(0.15) : Color.clear, in: .rect(cornerRadius: 6))
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture { onPick() }
+        .onTapGesture { onPick(NSEvent.modifierFlags.contains(.command)) }
         .pointerStyle(.link)
     }
 

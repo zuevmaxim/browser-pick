@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let store = BrowserStore()
+    private let siteRoutingStore = SiteRoutingStore()
     private var settingsWindowController: SettingsWindowController?
     private var chooserWindowController: ChooserWindowController?
 
@@ -68,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openSettings() {
         if settingsWindowController == nil {
-            settingsWindowController = SettingsWindowController(store: store)
+            settingsWindowController = SettingsWindowController(store: store, siteRoutingStore: siteRoutingStore)
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindowController?.showWindow(nil)
@@ -131,12 +132,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let request = WebURLRequest(validating: urlString) else {
             return
         }
-        presentChooser(for: request)
+        routeOrPresentChooser(for: request)
     }
 
-    private func presentChooser(for request: WebURLRequest) {
+    private func routeOrPresentChooser(for request: WebURLRequest) {
+        let shouldBypassRule = NSEvent.modifierFlags.contains(.option)
+        if !shouldBypassRule,
+           let bundleIdentifier = siteRoutingStore.browserBundleIdentifier(for: request.normalizedHost),
+           let browser = store.browser(bundleIdentifier: bundleIdentifier),
+           BrowserLaunchValidator.isValidLaunchTarget(browser) {
+            open(request: request, in: browser)
+            return
+        }
+
         if chooserWindowController == nil {
-            chooserWindowController = ChooserWindowController(store: store) { [weak self] browser, request in
+            chooserWindowController = ChooserWindowController(
+                store: store,
+                siteRoutingStore: siteRoutingStore
+            ) { [weak self] browser, request in
                 self?.open(request: request, in: browser)
             }
         }

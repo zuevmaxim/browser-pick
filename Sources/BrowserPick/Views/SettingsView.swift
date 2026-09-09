@@ -3,7 +3,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var store: BrowserStore
+    @Bindable var siteRoutingStore: SiteRoutingStore
     @State private var selection: Browser.ID?
+    @State private var siteRuleSelection: SiteRule.ID?
     @State private var launchAtLogin: Bool = LaunchAtLogin.isEnabled
     @State private var isDefault: Bool = DefaultBrowserManager.isDefault
     @State private var defaultErrorMessage: String?
@@ -44,13 +46,71 @@ struct SettingsView: View {
 
             Divider()
 
+            Text("Remembered Sites")
+                .font(.headline)
+
+            rememberedSitesList
+
+            HStack {
+                Button {
+                    if let host = siteRuleSelection,
+                       let rule = siteRoutingStore.rules.first(where: { $0.id == host }) {
+                        siteRoutingStore.remove(rule)
+                        siteRuleSelection = nil
+                    }
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .disabled(siteRuleSelection == nil)
+
+                Spacer()
+
+                Button("Reset Learned Choices") {
+                    siteRoutingStore.clearLearnedChoices()
+                }
+                .disabled(!siteRoutingStore.hasLearnedChoices)
+            }
+
+            Divider()
+
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     LaunchAtLogin.isEnabled = newValue
                 }
         }
         .padding(20)
-        .frame(minWidth: 520, minHeight: 520)
+        .frame(minWidth: 560, minHeight: 620)
+    }
+
+    private var rememberedSitesList: some View {
+        Table(siteRoutingStore.rules, selection: $siteRuleSelection) {
+            TableColumn("Site") { rule in
+                Text(rule.host)
+                    .font(.system(.body, design: .monospaced))
+            }
+
+            TableColumn("Browser") { rule in
+                Picker("", selection: siteRuleBrowserBinding(for: rule)) {
+                    if store.browser(bundleIdentifier: rule.browserBundleIdentifier) == nil {
+                        Text("Missing browser").tag(rule.browserBundleIdentifier)
+                    }
+                    ForEach(store.browsers) { browser in
+                        Text(browser.name).tag(browser.bundleIdentifier)
+                    }
+                }
+                .labelsHidden()
+            }
+        }
+        .frame(minHeight: 120)
+        .overlay {
+            if siteRoutingStore.rules.isEmpty {
+                ContentUnavailableView(
+                    "No Remembered Sites",
+                    systemImage: "globe",
+                    description: Text("Choose the same browser three times, or ⌘-click it in the chooser.")
+                )
+            }
+        }
     }
 
     private var defaultBrowserSection: some View {
@@ -131,6 +191,17 @@ struct SettingsView: View {
                 let trimmed = String(newValue.prefix(1)).lowercased()
                 updated.shortcut = trimmed.isEmpty ? nil : trimmed
                 store.update(updated)
+            }
+        )
+    }
+
+    private func siteRuleBrowserBinding(for rule: SiteRule) -> Binding<String> {
+        Binding(
+            get: { rule.browserBundleIdentifier },
+            set: { bundleIdentifier in
+                var updated = rule
+                updated.browserBundleIdentifier = bundleIdentifier
+                siteRoutingStore.update(updated)
             }
         )
     }

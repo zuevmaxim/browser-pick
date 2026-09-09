@@ -70,6 +70,10 @@ final class BrowserStore {
         return browsers[index]
     }
 
+    func browser(bundleIdentifier: String) -> Browser? {
+        browsers.first { $0.bundleIdentifier == bundleIdentifier }
+    }
+
     private func load() {
         guard let data = defaults.data(forKey: storageKey),
               let decoded = try? JSONDecoder().decode([Browser].self, from: data) else {

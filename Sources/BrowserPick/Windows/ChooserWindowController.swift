@@ -9,11 +9,17 @@ private final class ChooserPanel: NSPanel {
 
 final class ChooserWindowController: NSWindowController {
     private let store: BrowserStore
+    private let siteRoutingStore: SiteRoutingStore
     private let onPick: (Browser, WebURLRequest) -> Void
     private var requests = FIFOQueue<WebURLRequest>()
 
-    init(store: BrowserStore, onPick: @escaping (Browser, WebURLRequest) -> Void) {
+    init(
+        store: BrowserStore,
+        siteRoutingStore: SiteRoutingStore,
+        onPick: @escaping (Browser, WebURLRequest) -> Void
+    ) {
         self.store = store
+        self.siteRoutingStore = siteRoutingStore
         self.onPick = onPick
 
         let panel = ChooserPanel(
@@ -50,13 +56,46 @@ final class ChooserWindowController: NSWindowController {
             return
         }
 
+        let suggestion = siteRoutingStore.suggestion(for: request.normalizedHost).flatMap { suggestion in
+            store.browser(bundleIdentifier: suggestion.browserBundleIdentifier).map { (suggestion, $0) }
+        }
+
         let view = ChooserView(
             store: store,
             request: request,
-            onPick: { [weak self] browser in
+            suggestion: suggestion.map { (suggestion: $0.0, browser: $0.1) },
+            onPick: { [weak self] browser, remember in
                 guard let self, let request = self.requests.completeCurrent() else { return }
+                if remember {
+                    self.siteRoutingStore.remember(
+                        host: request.normalizedHost,
+                        browserBundleIdentifier: browser.bundleIdentifier
+                    )
+                } else {
+                    if suggestion != nil {
+                        self.siteRoutingStore.dismissSuggestion(for: request.normalizedHost)
+                    }
+                    self.siteRoutingStore.recordChoice(
+                        host: request.normalizedHost,
+                        browserBundleIdentifier: browser.bundleIdentifier
+                    )
+                }
                 self.onPick(browser, request)
                 self.showCurrent()
+            },
+            onAcceptSuggestion: { [weak self] in
+                guard let self,
+                      let suggestedBrowser = suggestion?.1,
+                      let request = self.requests.completeCurrent() else { return }
+                self.siteRoutingStore.remember(
+                    host: request.normalizedHost,
+                    browserBundleIdentifier: suggestedBrowser.bundleIdentifier
+                )
+                self.onPick(suggestedBrowser, request)
+                self.showCurrent()
+            },
+            onDismissSuggestion: { [weak self] in
+                self?.siteRoutingStore.dismissSuggestion(for: request.normalizedHost)
             },
             onCancel: { [weak self] in
                 self?.requests.cancelCurrent()

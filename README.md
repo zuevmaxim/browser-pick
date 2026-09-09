@@ -16,10 +16,12 @@ Minimum viable scope:
 
 - Menubar icon, no dock icon. Icon indicates the app is running. Clicking it opens **Settings**. Right-click (or menu) has two items: **Settings** and **Quit**.
 - Registers as the system handler for `http` and `https`.
-- Chooser popup on every intercepted URL, keyboard-driven (number keys / arrows + return).
+- Chooser popup on every unmatched intercepted URL, keyboard-driven (number keys / arrows + return).
+- Remembers an explicit browser choice for a site and opens future links from that hostname directly. After three consistent choices, the chooser offers to remember; Command-click remembers immediately. Hold Option while opening a link to bypass a remembered choice.
 - Settings window:
   - Manage browser list: add/remove any `.app` that can open URLs.
   - Per-browser custom name, icon, and keyboard shortcut.
+  - Review, change, or remove remembered sites.
   - Launch at Login toggle.
 
 ## Tech

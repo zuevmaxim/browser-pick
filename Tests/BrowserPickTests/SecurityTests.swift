@@ -17,6 +17,12 @@ final class WebURLRequestTests: XCTestCase {
         }
     }
 
+    func testNormalizesHostForExactSiteMatching() throws {
+        let request = try XCTUnwrap(WebURLRequest(validating: "https://GitHub.COM./apple/swift"))
+
+        XCTAssertEqual(request.normalizedHost, "github.com")
+    }
+
     func testRejectsDisallowedAndMalformedURLs() {
         let inputs = [
             "file:///tmp/example",
@@ -33,6 +39,85 @@ final class WebURLRequestTests: XCTestCase {
         for input in inputs {
             XCTAssertNil(WebURLRequest(validating: input), input)
         }
+    }
+}
+
+@MainActor
+final class SiteRoutingStoreTests: XCTestCase {
+    func testSuggestsOnlyAfterThreeConsecutiveChoices() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SiteRoutingStore(defaults: defaults)
+
+        store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        XCTAssertNil(store.suggestion(for: "github.com"))
+
+        store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        XCTAssertEqual(
+            store.suggestion(for: "github.com"),
+            SiteSuggestion(host: "github.com", browserBundleIdentifier: "browser-a")
+        )
+
+        store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-b")
+        XCTAssertNil(store.suggestion(for: "github.com"))
+    }
+
+    func testDismissedSuggestionReturnsAfterCooldown() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SiteRoutingStore(defaults: defaults)
+        for _ in 0..<3 {
+            store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        }
+
+        store.dismissSuggestion(for: "github.com")
+        for _ in 0..<9 {
+            store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        }
+        XCTAssertNil(store.suggestion(for: "github.com"))
+
+        store.recordChoice(host: "github.com", browserBundleIdentifier: "browser-a")
+        XCTAssertNotNil(store.suggestion(for: "github.com"))
+    }
+
+    func testRememberedRulePersistsAndCanBeChangedAndRemoved() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SiteRoutingStore(defaults: defaults)
+        store.remember(host: "github.com", browserBundleIdentifier: "browser-a")
+
+        let restored = SiteRoutingStore(defaults: defaults)
+        XCTAssertEqual(restored.browserBundleIdentifier(for: "github.com"), "browser-a")
+        XCTAssertNil(restored.browserBundleIdentifier(for: "evilgithub.com"))
+        XCTAssertNil(restored.suggestion(for: "github.com"))
+
+        var rule = try XCTUnwrap(restored.rules.first)
+        rule.browserBundleIdentifier = "browser-b"
+        restored.update(rule)
+        XCTAssertEqual(restored.browserBundleIdentifier(for: "github.com"), "browser-b")
+
+        restored.remove(rule)
+        XCTAssertNil(restored.browserBundleIdentifier(for: "github.com"))
+    }
+
+    func testLearnedChoicesCanBeClearedWithoutRemovingRules() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SiteRoutingStore(defaults: defaults)
+        store.recordChoice(host: "example.com", browserBundleIdentifier: "browser-a")
+        store.remember(host: "github.com", browserBundleIdentifier: "browser-b")
+
+        XCTAssertTrue(store.hasLearnedChoices)
+        store.clearLearnedChoices()
+
+        XCTAssertFalse(store.hasLearnedChoices)
+        XCTAssertEqual(store.browserBundleIdentifier(for: "github.com"), "browser-b")
+    }
+
+    private func makeDefaults() throws -> (UserDefaults, String) {
+        let suiteName = "BrowserPickTests.\(UUID().uuidString)"
+        return (try XCTUnwrap(UserDefaults(suiteName: suiteName)), suiteName)
     }
 }
 
